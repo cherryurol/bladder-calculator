@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bladder Efficiency Tracker v4.2</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --blue: #3498db;
+            --red: #e74c3c;
+            --purple: #9b59b6;
+            --bg: #f4f7f6;
+            --card: #ffffff;
+            --orange: #e67e22;
+            --green: #27ae60;
+        }
+
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); margin: 0; display: flex; height: 100vh; color: var(--primary); }
+        
+        aside { width: 340px; background: var(--card); border-right: 1px solid #ddd; padding: 20px; display: flex; flex-direction: column; gap: 15px; overflow-y: auto; }
+        h2 { font-size: 1.1rem; margin: 0; color: var(--primary); border-bottom: 2px solid var(--blue); padding-bottom: 5px; }
+        
+        .input-group { display: flex; flex-direction: column; gap: 3px; }
+        label { font-size: 0.8rem; font-weight: bold; }
+        input { padding: 7px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem; }
+        
+        button { padding: 10px; cursor: pointer; border: none; border-radius: 4px; font-weight: bold; transition: 0.3s; font-size: 0.85rem; }
+        .btn-save { background: var(--blue); color: white; margin-top: 5px; }
+        .btn-save:hover { background: #2980b9; }
+        
+        details summary { cursor: pointer; font-weight: bold; margin: 5px 0; font-size: 0.85rem; color: var(--purple); }
+        
+        main { flex: 1; padding: 25px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
+        
+        .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .card { background: var(--card); padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .sei-card { border-top: 5px solid var(--blue); }
+        .vei-card { border-top: 5px solid var(--red); }
+        
+        .val { font-size: 1.8rem; font-weight: bold; }
+        .sub-text { font-size: 0.75rem; color: #7f8c8d; font-style: italic; }
+
+        .trend-panel { background: var(--card); padding: 15px; border-radius: 8px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; border: 1px solid #eee; }
+        .metric-box { text-align: center; padding: 8px; border: 1px solid #f8f9fa; border-radius: 6px; background: #fafafa; }
+        .metric-val { display: block; font-size: 1.1rem; font-weight: bold; }
+        .verdict-box { grid-column: span 4; padding: 12px; border-radius: 6px; text-align: center; font-weight: bold; font-size: 0.95rem; }
+
+        .chart-container { background: var(--card); padding: 15px; border-radius: 8px; flex-grow: 1; min-height: 350px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .badge { background: var(--purple); color: white; font-size: 0.65rem; padding: 2px 6px; border-radius: 10px; margin-left: 5px; text-transform: uppercase; }
+        
+        #fileImport { display: none; }
+        
+        .gen-box { border: 1px dashed var(--orange); padding: 10px; border-radius: 4px; background: #fffcf9; }
+        .btn-gen { background: white; border: 1px solid #ddd; margin-bottom: 5px; width: 100%; text-align: left; padding: 6px; font-size: 0.75rem; }
+        .btn-gen:hover { background: #fff5eb; }
+
+        /* Modal Styles */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); }
+        .modal-content { background: white; margin: 5% auto; padding: 30px; border-radius: 10px; width: 80%; max-width: 800px; max-height: 80vh; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+        .modal-close { float: right; font-size: 28px; font-weight: bold; cursor: pointer; color: #aaa; }
+        .modal-close:hover { color: #000; }
+        .modal h2 { color: var(--blue); border-bottom: 3px solid var(--blue); padding-bottom: 10px; }
+        .modal h3 { color: var(--purple); margin-top: 25px; }
+        .modal ul { line-height: 1.8; }
+        .modal code { background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-family: monospace; }
+        .highlight-box { background: #fff3cd; border-left: 4px solid var(--orange); padding: 12px; margin: 15px 0; border-radius: 4px; }
+        .info-box { background: #d1ecf1; border-left: 4px solid var(--blue); padding: 12px; margin: 15px 0; border-radius: 4px; }
+
+        .btn-readme { background: var(--green); color: white; width: 100%; }
+        .btn-readme:hover { background: #229954; }
+    </style>
+</head>
+<body>
+
+<aside>
+    <h2>➕ New Entry</h2>
+    <div class="input-group">
+        <label>Time (HH:MM)</label>
+        <input type="time" id="inTime">
+    </div>
+    <div class="input-group">
+        <label>Volume (ml)</label>
+        <input type="number" id="inVol" placeholder="e.g., 250">
+    </div>
+    <div class="input-group">
+        <label>Duration (sec)</label>
+        <input type="number" id="inDur" placeholder="e.g., 20">
+    </div>
+    <button class="btn-save" onclick="saveEntry()">SAVE ENTRY</button>
+
+    <details>
+        <summary>⚙️ Parameters (Calibration)</summary>
+        <div class="input-group">
+            <label>Vmin (min volume)</label>
+            <input type="number" id="pVmin" value="100">
+        </div>
+        <div class="input-group">
+            <label>Vopt (target volume)</label>
+            <input type="number" id="pVopt" value="350">
+        </div>
+        <div class="input-group">
+            <label>Qref (reference flow)</label>
+            <input type="number" id="pQref" value="12">
+        </div>
+        <div class="input-group">
+            <label>RFR (refill rate)</label>
+            <input type="number" id="pRfr" value="2.0" step="0.1">
+        </div>
+    </details>
+
+    <div class="gen-box">
+        <label style="color: var(--orange); font-size: 0.75rem;">🛠 TEST GENERATOR</label>
+        <button class="btn-gen" onclick="generateScenario('positive')">📈 Test: Positive Trend</button>
+        <button class="btn-gen" onclick="generateScenario('pseudo')">⚠️ Test: Pseudo-Improvement</button>
+        <button class="btn-gen" onclick="generateScenario('negative')">📉 Test: Negative Trend</button>
+        <p style="font-size: 0.65rem; color: #999; margin: 0;">*Deletes current data and creates 14 entries</p>
+    </div>
+
+    <div style="margin-top: auto; display: flex; flex-direction: column; gap: 8px;">
+        <button class="btn-readme" onclick="showReadme()">📖 README (Theory & Methodology)</button>
+        <button style="background: #27ae60; color: white;" onclick="exportData()">Export JSON</button>
+        <button style="background: #2980b9; color: white;" onclick="document.getElementById('fileImport').click()">Import JSON</button>
+        <input type="file" id="fileImport" accept=".json" onchange="importData(event)">
+        <button style="background: #95a5a6; color: white; padding: 5px;" onclick="clearData()">Clear All</button>
+    </div>
+</aside>
+
+<main>
+    <div class="cards">
+        <div class="card sei-card">
+            <label>SEI (Storage Efficiency)</label>
+            <div><span class="val" id="currSei">0%</span> <span id="overnightBadge"></span></div>
+            <div class="sub-text">Session average: <span id="avgSei">0%</span></div>
+        </div>
+        <div class="card vei-card">
+            <label>VEI (Voiding Efficiency)</label>
+            <div><span class="val" id="currVei">0%</span></div>
+            <div class="sub-text">Session average: <span id="avgVei">0%</span></div>
+        </div>
+    </div>
+
+    <div class="trend-panel" id="trendPanel" style="display: none;">
+        <div class="metric-box">
+            <span class="sub-text">Δ SEI (Trend)</span>
+            <span class="metric-val" id="tDelta">0</span>
+        </div>
+        <div class="metric-box">
+            <span class="sub-text">IQR (Stability)</span>
+            <span class="metric-val" id="tIqr">0</span>
+        </div>
+        <div class="metric-box">
+            <span class="sub-text">AF Ratio</span>
+            <span class="metric-val" id="tAf">0</span>
+        </div>
+        <div class="metric-box">
+            <span class="sub-text">D/N Ratio (Night/Day)</span>
+            <span class="metric-val" id="tDn">0</span>
+        </div>
+        <div id="verdict" class="verdict-box">Need 7 entries</div>
+    </div>
+
+    <div class="chart-container">
+        <canvas id="mainChart"></canvas>
+    </div>
+</main>
+
+<!-- README Modal -->
+<div id="readmeModal" class="modal">
+    <div class="modal-content">
+        <span class="modal-close" onclick="closeReadme()">&times;</span>
+        <h2>📖 Bladder Efficiency Tracker - Theory & Methodology</h2>
+        
+        <h3>📊 Overview</h3>
+        <p>This tool tracks and analyzes bladder function using two core efficiency indices that combine volume, timing, and flow rate data to provide comprehensive assessment of both storage and voiding capabilities.</p>
+
+        <h3>🔬 Core Metrics</h3>
+        <h4>SEI (Storage Efficiency Index)</h4>
+        <p>Measures how well the bladder stores urine before voiding. Formula:</p>
+        <code>SEI = MA × DA × 100%</code>
+        <ul>
+            <li><strong>MA (Mechanical Advantage):</strong> Volume adequacy normalized between Vmin and Vopt</li>
+            <li><strong>DA (Displacement Advantage):</strong> How well the actual fill rate matches the expected refill rate (RFR)</li>
+        </ul>
+        <p><strong>Interpretation:</strong> Higher SEI indicates better bladder capacity and storage control. Values 70-90% suggest optimal function.</p>
+
+        <h4>VEI (Voiding Efficiency Index)</h4>
+        <p>Evaluates bladder emptying effectiveness. Formula:</p>
+        <code>VEI = √(Qavg / Qref) × MA × 100%</code>
+        <ul>
+            <li><strong>Qavg:</strong> Average flow rate (Volume / Duration)</li>
+            <li><strong>Qref:</strong> Reference flow rate (typically 12 ml/s)</li>
+        </ul>
+        <p><strong>Interpretation:</strong> Higher VEI indicates efficient emptying. Values 60-85% are typically normal.</p>
+
+        <h3>📈 Trend Analysis Metrics</h3>
+        
+        <div class="highlight-box">
+            <strong>⚠️ Important:</strong> Trend analysis requires a minimum of <strong>21 entries</strong> for reliable interpretation. With fewer entries, trend indicators may be unstable and should not be used for clinical decision-making.
+        </div>
+
+        <h4>Δ SEI (Delta SEI)</h4>
+        <p>Change in median SEI between the last 7 and previous 7 entries.</p>
+        <ul>
+            <li><strong>Δ ≥ +5:</strong> Positive trend (improvement)</li>
+            <li><strong>-5 < Δ < +5:</strong> Stable condition</li>
+            <li><strong>Δ ≤ -5:</strong> Negative trend (deterioration)</li>
+        </ul>
+
+        <h4>IQR (Interquartile Range)</h4>
+        <p>Measures consistency in SEI values (difference between 75th and 25th percentile).</p>
+        <ul>
+            <li><strong>IQR < 15:</strong> Stable, consistent function</li>
+            <li><strong>IQR ≥ 15:</strong> High variability (may indicate external factors or measurement issues)</li>
+        </ul>
+
+        <h4>AF Ratio (Accelerated Fill Ratio)</h4>
+        <p>Proportion of entries with fill rates exceeding 150% of the median.</p>
+        <ul>
+            <li><strong>AF > 0.4:</strong> Suggests pseudo-improvement due to excessive fluid intake</li>
+            <li><strong>AF ≤ 0.4:</strong> Normal hydration patterns</li>
+        </ul>
+
+        <h4>D/N Ratio (Day/Night Ratio)</h4>
+        <p>Ratio of median nighttime SEI to daytime SEI.</p>
+        <ul>
+            <li><strong>Ratio > 1.0:</strong> Better nighttime capacity (normal)</li>
+            <li><strong>Ratio < 0.7:</strong> May indicate nocturia concerns</li>
+        </ul>
+
+        <h3>✅ Verdict Interpretation</h3>
+        <ul>
+            <li><strong>✅ POSITIVE TREND:</strong> Δ SEI ≥ +5 and IQR < 15 → Genuine improvement in bladder function</li>
+            <li><strong>⚠️ PSEUDO-IMPROVEMENT:</strong> AF Ratio > 0.4 → Apparent improvement driven by increased fluid intake, not functional improvement</li>
+            <li><strong>📉 NEGATIVE TREND:</strong> Δ SEI ≤ -5 → Decline in storage efficiency</li>
+            <li><strong>⚖️ STABLE STATE:</strong> Minimal change in median SEI → Consistent baseline function</li>
+        </ul>
+
+        <h3>🎯 Recommendations for Use</h3>
+        <ol>
+            <li><strong>Consistent Timing:</strong> Try to void at similar intervals to minimize variability</li>
+            <li><strong>Accurate Measurements:</strong> Use measuring containers for volume; count seconds for duration</li>
+            <li><strong>Hydration Control:</strong> Maintain consistent fluid intake patterns to avoid skewing AF Ratio</li>
+            <li><strong>Track Context:</strong> Note unusual circumstances (illness, medications, stress) that may affect readings</li>
+            <li><strong>Data Threshold:</strong> Collect at least <strong>21 entries (3 weeks of daily tracking)</strong> before drawing conclusions about trends</li>
+            <li><strong>Overnight Entries:</strong> These are marked with a "night" badge and excluded from DA calculation due to sleep period fill dynamics</li>
+        </ol>
+
+        <div class="info-box">
+            <strong>ℹ️ Calibration:</strong> Default parameters (Vmin=100ml, Vopt=350ml, Qref=12ml/s, RFR=2.0ml/min) represent typical adult values. Adjust based on individual baseline or clinical guidance.
+        </div>
+
+        <h3>🔧 Test Generator</h3>
+        <p>The built-in test scenarios help validate the algorithm's trend detection capabilities:</p>
+        <ul>
+            <li><strong>Positive Trend:</strong> Simulates improved storage over time</li>
+            <li><strong>Pseudo-Improvement:</strong> Simulates artificially high volumes with shortened intervals</li>
+            <li><strong>Negative Trend:</strong> Simulates declining storage capacity</li>
+        </ul>
+
+        <h3>⚕️ Clinical Context</h3>
+        <p>This tool is designed for <strong>self-monitoring and trend awareness</strong>. It is NOT a diagnostic tool. Abnormal patterns or concerning trends should be discussed with a healthcare provider. The tool may be useful for:</p>
+        <ul>
+            <li>Tracking pelvic floor therapy progress</li>
+            <li>Monitoring medication effects on bladder function</li>
+            <li>Identifying patterns related to lifestyle factors</li>
+            <li>Providing objective data for clinical consultations</li>
+        </ul>
+
+        <p style="text-align: center; margin-top: 30px; color: #888; font-size: 0.9rem;">
+            Version 4.2 | Data stored locally in browser | Export your data regularly for backup
+        </p>
+    </div>
+</div>
+
+<script>
+    let history = JSON.parse(localStorage.getItem('bladderData')) || [];
+    let chart;
+
+    // Auto-set current time
+    document.getElementById('inTime').value = new Date().toTimeString().slice(0,5);
+
+    function saveEntry() {
+        const time = document.getElementById('inTime').value;
+        const vol = parseFloat(document.getElementById('inVol').value);
+        const dur = parseFloat(document.getElementById('inDur').value);
+        
+        if (!time || isNaN(vol) || isNaN(dur)) return alert("Please fill in volume and duration");
+
+        const params = getParams();
+        const entry = calculateMetrics(time, vol, dur, params);
+
+        history.push(entry);
+        localStorage.setItem('bladderData', JSON.stringify(history));
+        
+        document.getElementById('inVol').value = '';
+        document.getElementById('inDur').value = '';
+        updateUI();
+    }
+
+    function getParams() {
+        return {
+            vmin: parseFloat(document.getElementById('pVmin').value),
+            vopt: parseFloat(document.getElementById('pVopt').value),
+            qref: parseFloat(document.getElementById('pQref').value),
+            rfr: parseFloat(document.getElementById('pRfr').value)
+        };
+    }
+
+    function calculateMetrics(time, vol, dur, params) {
+        const lastEntry = history[history.length - 1];
+        let fillTime = 0;
+        let isOvernight = false;
+        let da = 1.0;
+
+        if (lastEntry) {
+            let diff = timeToMins(time) - timeToMins(lastEntry.time);
+            if (diff <= 0) { diff += 1440; isOvernight = true; }
+            fillTime = diff;
+        } else {
+            isOvernight = true;
+        }
+
+        const ma = Math.max(0, Math.min(1, (vol - params.vmin) / (params.vopt - params.vmin)));
+        if (!isOvernight && fillTime > 0) {
+            da = Math.min(1.0, (vol / fillTime) / params.rfr);
+        }
+
+        const sei = (ma * da * 100).toFixed(1);
+        const qavg = vol / dur;
+        const vei = (Math.max(0, Math.min(1, Math.sqrt(qavg / params.qref) * ma)) * 100).toFixed(1);
+
+        const hour = parseInt(time.split(':')[0]);
+        return {
+            time, vol, dur, fillTime, 
+            fillRate: fillTime > 0 ? vol / fillTime : 0,
+            sei: parseFloat(sei), vei: parseFloat(vei),
+            isNight: (hour >= 22 || hour < 6),
+            isOvernight
+        };
+    }
+
+    function timeToMins(t) {
+        const [h, m] = t.split(':').map(Number);
+        return h * 60 + m;
+    }
+
+    function getMedian(arr) {
+        if (!arr.length) return 0;
+        const s = [...arr].sort((a, b) => a - b);
+        const mid = Math.floor(s.length / 2);
+        return s.length % 2 !== 0 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+    }
+
+    function updateUI() {
+        if (!history.length) {
+            document.getElementById('trendPanel').style.display = 'none';
+            if(chart) chart.destroy();
+            return;
+        }
+
+        const last = history[history.length - 1];
+        document.getElementById('currSei').innerText = last.sei + '%';
+        document.getElementById('currVei').innerText = last.vei + '%';
+        document.getElementById('overnightBadge').innerHTML = last.isOvernight ? '<span class="badge">night</span>' : '';
+
+        document.getElementById('avgSei').innerText = (history.reduce((a, b) => a + b.sei, 0) / history.length).toFixed(1) + '%';
+        document.getElementById('avgVei').innerText = (history.reduce((a, b) => a + b.vei, 0) / history.length).toFixed(1) + '%';
+
+        document.getElementById('trendPanel').style.display = 'grid';
+        
+        const last7 = history.slice(-7);
+        const prev7 = history.length >= 14 ? history.slice(-14, -7) : [];
+        
+        const mLast = getMedian(last7.map(e => e.sei));
+        const mPrev = prev7.length ? getMedian(prev7.map(e => e.sei)) : mLast;
+        const delta = (mLast - mPrev).toFixed(1);
+        
+        const sorted = last7.map(e => e.sei).sort((a,b) => a-b);
+        const iqr = (sorted[Math.floor(sorted.length * 0.75)] - sorted[Math.floor(sorted.length * 0.25)]).toFixed(1);
+        
+        const medianAllFR = getMedian(history.map(e => e.fillRate));
+        const afRatio = (last7.filter(e => e.fillRate > 1.5 * medianAllFR).length / 7).toFixed(2);
+
+        const nightSeis = history.filter(e => e.isNight).map(e => e.sei);
+        const daySeis = history.filter(e => !e.isNight).map(e => e.sei);
+        const dnRatio = daySeis.length && nightSeis.length ? (getMedian(nightSeis) / getMedian(daySeis)).toFixed(2) : "---";
+
+        document.getElementById('tDelta').innerText = (delta > 0 ? '+' : '') + delta;
+        document.getElementById('tIqr').innerText = iqr;
+        document.getElementById('tAf').innerText = afRatio;
+        document.getElementById('tDn').innerText = dnRatio;
+
+        const vBox = document.getElementById('verdict');
+        if (history.length < 7) {
+            vBox.innerText = "Collect more data (minimum 7 entries)";
+            vBox.style.background = "#eee";
+            vBox.style.color = "#666";
+        } else if (history.length < 21) {
+            vBox.innerText = "⚠️ WARNING: Need 21+ entries for reliable trend analysis";
+            vBox.style.background = "#fff3cd";
+            vBox.style.color = "#856404";
+        } else {
+            vBox.style.color = "#000";
+            if (parseFloat(delta) >= 5 && parseFloat(iqr) < 15) {
+                vBox.innerText = "✅ POSITIVE TREND (Improvement)";
+                vBox.style.background = "#d4edda";
+            } else if (parseFloat(afRatio) > 0.4) {
+                vBox.innerText = "⚠️ PSEUDO-IMPROVEMENT (Excess fluid intake)";
+                vBox.style.background = "#fff3cd";
+            } else if (parseFloat(delta) <= -5) {
+                vBox.innerText = "📉 NEGATIVE TREND (Deterioration)";
+                vBox.style.background = "#f8d7da";
+            } else {
+                vBox.innerText = "⚖️ STABLE STATE";
+                vBox.style.background = "#d1ecf1";
+            }
+        }
+        updateChart();
+    }
+
+    function updateChart() {
+        const ctx = document.getElementById('mainChart').getContext('2d');
+        if (chart) chart.destroy();
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: history.map((_, i) => i + 1),
+                datasets: [
+                    { label: 'SEI (Storage)', data: history.map(e => e.sei), borderColor: '#3498db', pointBackgroundColor: history.map(e => e.isOvernight ? '#9b59b6' : '#3498db'), tension: 0.2 },
+                    { label: 'VEI (Voiding)', data: history.map(e => e.vei), borderColor: '#e74c3c', borderDash: [5, 5], tension: 0.2 }
+                ]
+            },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 100 } } }
+        });
+    }
+
+    function generateScenario(type) {
+        if (!confirm("Warning! Current data will be replaced with test data. Continue?")) return;
+        history = [];
+        const params = getParams();
+        let baseTime = new Date();
+        baseTime.setHours(8, 0, 0);
+
+        for (let i = 0; i < 14; i++) {
+            let vol, interval;
+            if (type === 'positive') {
+                vol = i < 7 ? 130 : 280; interval = i < 7 ? 120 : 210;
+            } else if (type === 'pseudo') {
+                vol = 280; interval = i < 7 ? 180 : 50;
+            } else {
+                vol = i < 7 ? 280 : 110; interval = i < 7 ? 180 : 100;
+            }
+            baseTime.setMinutes(baseTime.getMinutes() + interval);
+            const entry = calculateMetrics(baseTime.toTimeString().slice(0,5), vol + (Math.random()*20), (vol/12), params);
+            history.push(entry);
+        }
+        localStorage.setItem('bladderData', JSON.stringify(history));
+        updateUI();
+    }
+
+    function exportData() {
+        const dataStr = JSON.stringify(history, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = "bladder_report.json";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    function importData(e) {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            history = JSON.parse(ev.target.result);
+            localStorage.setItem('bladderData', JSON.stringify(history));
+            updateUI();
+        };
+        reader.readAsText(e.target.files[0]);
+    }
+
+    function clearData() {
+        if (confirm("Delete all data?")) { localStorage.clear(); history = []; location.reload(); }
+    }
+
+    function showReadme() {
+        document.getElementById('readmeModal').style.display = 'block';
+    }
+
+    function closeReadme() {
+        document.getElementById('readmeModal').style.display = 'none';
+    }
+
+    // Close modal when clicking outside
+    window.onclick = function(event) {
+        const modal = document.getElementById('readmeModal');
+        if (event.target == modal) {
+            modal.style.display = 'none';
+        }
+    }
+
+    updateUI();
+</script>
+</body>
+</html>
