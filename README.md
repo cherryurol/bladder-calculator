@@ -73,9 +73,10 @@ The associated simulation study defines five patterns:
 ### As a web application
 
 1. Open [the calculator](https://cherryurol.github.io/bladder-calculator/)
-2. Enter voiding events (time, volume, duration)
-3. View real-time SEI/VEI calculations and trend analysis
-4. Export data as JSON for backup or sharing
+2. Press Clear to delete previous data
+3. Enter voiding events (time, volume, duration)
+4. View real-time SEI/VEI calculations and trend analysis
+5. Export data as JSON for backup or sharing
 
 ### Running locally
 
