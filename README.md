@@ -1,130 +1,68 @@
-# Bladder Efficiency Tracker (BET) v4.2
+# Bladder Efficiency Tracker (BET) v4.3
 
 A web-based tool for quantitative assessment of bladder storage and voiding efficiency from standard voiding diary data.
 
-**Live calculator:** [https://cherryurol.github.io/bladder-calculator/](https://cherryurol.github.io/bladder-calculator/)
+**Live calculator:** https://cherryurol.github.io/bladder-calculator/
+
+**Parameter calibrator:** https://cherryurol.github.io/bladder-calculator/Parameter%20Calibrator.html
 
 ## Overview
 
-The Bladder Efficiency Tracker derives two composite biomechanical indices — Storage Efficiency Index (SEI) and Voiding Efficiency Index (VEI) — from voiding diary entries (time, volume, voiding duration). The theoretical foundation is the hydrostatic skeleton (HSK) principle applied to bladder mechanics.
+BET derives two biomechanical indices from a standard frequency–volume chart:
 
-**Associated publications:**
-> Vishnevskyi I. Urinary Bladder Mechanics: Potential Role of Hydrostatic Skeleton Design Principle. Open Discussion ePosters 790, ICS 2024.
+- **SEI** (Storage Efficiency Index) = `MA × DA × 100%`
+- **VEI** (Voiding Efficiency Index) = `√(Qavg / Qref) × MA × 100%`
 
-## Core Indices
+where:
 
-### Storage Efficiency Index (SEI)
+- **MA** (Magnitude Adjustment) is a piecewise-linear function of voided volume, anchored at Vmin and Vopt
+- **DA** (Diuresis Adjustment) penalises filling conditions that fall outside the physiological window
+- **Qavg** is the average flow rate (volume / duration); **Qref** is the reference flow
 
-```
-SEI = MA × DA × 100%
-```
+The framework is grounded in a hydrostatic skeleton biomechanical model of bladder accommodation.
 
-- **MA (Mechanical Advantage)** = clamp((V − Vmin) / (Vopt − Vmin), 0, 1)
-  - Reflects volume adequacy relative to calibrated target
-- **DA (Displacement Advantage)** = min(1.0, (V / Tfill) / RFR)
-  - Reflects whether the fill interval allowed adequate distension
-  - Set to 1.0 for nocturnal voids to prevent sleep-related artifacts
+## What's new in v4.3
 
-### Voiding Efficiency Index (VEI)
+The Diuresis Adjustment function is extended to a symmetric dual-penalty formulation:
 
-```
-VEI = clamp(√(Qavg / Qref) × MA, 0, 1) × 100%
-```
+| Fill rate | DA value |
+|---|---|
+| < RFR | FillRate / RFR (slow-filling penalty — unchanged from v4.2) |
+| RFR ≤ FillRate ≤ 1.5 × RFR | 1.0 (physiological window) |
+| > 1.5 × RFR | max(0.6, 1.0 − 0.05 × (FillRate − 1.5 × RFR)) (induced-diuresis penalty) |
 
-- **Qavg** = V / Duration (average flow rate)
-- **Qref** = reference flow rate (default 12.0 ml/s)
+This corrects an asymmetry in v4.2, where DA was capped at 1.0 for rapid filling and induced diuresis (excess fluid intake, polyuria, diuretic effect) was not penalised at the per-event SEI level. The Parameter Calibrator is unchanged.
 
-## Calibration Parameters
+A technical addendum demonstrating (i) equivalence of v4.2 and v4.3 in the physiological filling regime and (ii) corrective behaviour of v4.3 outside that regime is available on request.
 
-| Parameter | Description | Default | Range |
-|-----------|-------------|---------|-------|
-| Vmin | Minimum functional volume (ml) | 100 | 50–150 |
-| Vopt | Target optimal volume (ml) | 350 | 150–500 |
-| Qref | Reference flow rate (ml/s) | 12.0 | 8–15 |
-| RFR | Reference fill rate (ml/min) | 2.0 | 1.0–3.0 |
+## Reproducibility of the Monte Carlo validation study
 
-Defaults represent typical adult values. Calibration should be adjusted based on the patient's clinical profile (age, sex, diagnosis).
+The exact version of the calculator used to generate the validation results reported in our manuscript is preserved as a tagged release:
 
-## Trend Analysis Metrics
+→ **[v4.2-validation](https://github.com/cherryurol/bladder-calculator/releases/tag/v4.2-validation)**
 
-| Metric | Formula | Interpretation |
-|--------|---------|---------------|
-| Δ SEI | Median(last 7) − Median(previous 7) | ≥ +5: improvement; ≤ −5: deterioration |
-| IQR | Q75 − Q25 of SEI | < 15: stable; ≥ 15: high variability |
-| AF Ratio | Proportion of entries with fill rate > 1.5× median | > 0.4: possible pseudo-improvement |
-| D/N Ratio | Median(night SEI) / Median(day SEI) | < 0.7: nocturia concern |
-
-Trend analysis requires a minimum of 21 entries for reliable interpretation.
-
-## Efficiency Patterns
-
-The associated simulation study defines five patterns:
-
-| Code | Name | SEI | VEI | Description |
-|------|------|-----|-----|-------------|
-| HH | High–High | >70% | >70% | Efficient storage and voiding |
-| HL | High–Low | >50% | <35% | Preserved storage, impaired voiding |
-| LH | Low–High | <35% | Variable | Impaired storage, variable voiding |
-| LL | Low–Low | <25% | <25% | Both severely impaired |
-| MM | Moderate | 40–60% | 35–55% | Both moderately reduced |
+The validation cohort operates entirely within the physiological filling regime (maximum patient-mean fill rate 2.26 mL/min, against the v4.3 penalty threshold of 3.0 mL/min); v4.2 and v4.3 produce mathematically identical SEI/VEI values under these conditions, and the published discrimination results apply to v4.3 without re-computation.
 
 ## Usage
 
-### As a web application
+1. Enter the time, voided volume (mL), and duration (seconds) for each voiding event
+2. The calculator returns the per-event SEI, VEI, and session averages
+3. After 7+ entries, a trend panel becomes available (Δ SEI, IQR, AF Ratio, D/N Ratio) with a verdict on improvement, pseudo-improvement, deterioration, or stable state
+4. Reliable longitudinal interpretation requires ≥ 21 entries
 
-1. Open [the calculator](https://cherryurol.github.io/bladder-calculator/)
-2. Press Clear to delete previous data
-3. Enter voiding events (time, volume, duration)
-4. View real-time SEI/VEI calculations and trend analysis
-5. Export data as JSON for backup or sharing
+Calculator parameters (Vmin, Vopt, Qref, RFR) may be adjusted via the Parameter Calibrator using the patient's own physiological baseline.
 
-### Running locally
+## Disclaimer
 
-```bash
-git clone https://github.com/cherryurol/bladder-calculator.git
-cd bladder-calculator
-# Open index.html in any browser — no dependencies required
-```
-
-## Test Scenarios
-
-Built-in test generators validate algorithm behavior:
-
-- **Positive Trend** — simulates improving storage over 14 entries
-- **Pseudo-Improvement** — simulates artificially high volumes with shortened intervals (AF Ratio detection)
-- **Negative Trend** — simulates declining storage capacity
-
-## Technical Details
-
-- Pure HTML/CSS/JavaScript — no external dependencies
-- Data stored locally in browser (localStorage)
-- JSON import/export for data portability
-- No server communication — all computation is client-side
-
-## Important Notice
-
-This tool is designed for research and self-monitoring purposes. It is **not a diagnostic device**. BET generates biomechanical efficiency patterns, not clinical diagnoses. Abnormal patterns should be evaluated by a qualified healthcare provider in the context of the patient's history, examination, and confirmatory testing.
-
-## References
-
-1. Vishnevskyi I. Urinary Bladder Mechanics: Potential Role of Hydrostatic Skeleton Design Principle. Open Discussion ePosters 790, ICS 2024.
-2. Abrams P, et al. The standardisation of terminology of lower urinary tract function. Neurourol Urodyn. 2002;21(2):167–178.
-3. Rosier PF, et al. International Continence Society Good Urodynamic Practices and Terms 2016. Neurourol Urodyn. 2017;36(5):1243–1260.
+This tool is intended for research and educational use. It is not a medical device, has not been cleared by any regulatory authority, and is not a substitute for clinical evaluation by a qualified healthcare professional. See [DISCLAIMER.md](DISCLAIMER.md).
 
 ## License
 
-MIT License — see [LICENSE](LICENSE) file.
+Released under the [MIT License](LICENSE).
 
-## Authors
+## Contact
 
-- **Igor O. Vishnevskyi, MD, PhD** — Department of Urology, Drohobych City Hospital No. 1, Ukraine
-- **Maxim I. Vishnevskyi, MD** — Department of Urology, Drohobych City Hospital No. 1, Ukraine
-
-## Citation
-
-If you use this tool in your research, please cite:
-
-```
-Vishnevskyi I. Urinary Bladder Mechanics: Potential Role of Hydrostatic
-Skeleton Design Principle. Open Discussion ePosters 790, ICS 2024.
-```
+**Igor O. Vishnevskyi, MD, PhD**
+Department of Urology, Drohobych City Hospital No. 1, Ukraine
+cherryurol@gmail.com
+ORCID: [0000-0003-0561-7678](https://orcid.org/0000-0003-0561-7678)
