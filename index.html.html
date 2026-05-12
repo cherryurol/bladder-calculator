@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bladder Efficiency Tracker v4.3</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --blue: #3498db;
+            --red: #e74c3c;
+            --purple: #9b59b6;
+            --bg: #f4f7f6;
+            --card: #ffffff;
+            --orange: #e67e22;
+            --green: #27ae60;
+        }
+
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: var(--bg); 
+            margin: 0; 
+            display: flex; 
+            height: 100vh; 
+            color: var(--primary); 
+        }
+        
+        aside { width: 340px; background: var(--card); border-right: 1px solid #ddd; padding: 20px; display: flex; flex-direction: column; gap: 15px; overflow-y: auto; }
+        h2 { font-size: 1.1rem; margin: 0; color: var(--primary); border-bottom: 2px solid var(--blue); padding-bottom: 5px; }
+        
+        .input-group { display: flex; flex-direction: column; gap: 3px; }
+        label { font-size: 0.8rem; font-weight: bold; }
+        input { padding: 7px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem; }
+        
+        button { padding: 10px; cursor: pointer; border: none; border-radius: 4px; font-weight: bold; transition: 0.3s; font-size: 0.85rem; }
+        .btn-save { background: var(--blue); color: white; margin-top: 5px; }
+        .btn-save:hover { background: #2980b9; }
+        
+        details summary { cursor: pointer; font-weight: bold; margin: 5px 0; font-size: 0.85rem; color: var(--purple); }
+        
+        main { flex: 1; padding: 25px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
+        
+        .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .card { background: var(--card); padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .sei-card { border-top: 5px solid var(--blue); }
+        .vei-card { border-top: 5px solid var(--red); }
+        
+        .val { font-size: 1.8rem; font-weight: bold; }
+        .sub-text { font-size: 0.75rem; color: #7f8c8d; font-style: italic; }
+
+        .trend-panel { background: var(--card); padding: 15px; border-radius: 8px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; border: 1px solid #eee; }
+        .metric-box { text-align: center; padding: 8px; border: 1px solid #f8f9fa; border-radius: 6px; background: #fafafa; }
+        .metric-val { display: block; font-size: 1.1rem; font-weight: bold; }
+        .verdict-box { grid-column: span 4; padding: 12px; border-radius: 6px; text-align: center; font-weight: bold; font-size: 0.95rem; }
+
+        .chart-container { background: var(--card); padding: 15px; border-radius: 8px; flex-grow: 1; min-height: 350px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .badge { background: var(--purple); color: white; font-size: 0.65rem; padding: 2px 6px; border-radius: 10px; margin-left: 5px; text-transform: uppercase; }
+        
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); }
+        .modal-content { background: white; margin: 5% auto; padding: 30px; border-radius: 10px; width: 80%; max-width: 800px; max-height: 80vh; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+        .modal-close { float: right; font-size: 28px; font-weight: bold; cursor: pointer; color: #aaa; }
+        .modal-close:hover { color: #000; }
+    </style>
+</head>
+<body>
+
+<aside>
+    <h2>➕ New Entry (v4.3)</h2>
+    <div class="input-group">
+        <label>Time (HH:MM)</label>
+        <input type="time" id="inTime">
+    </div>
+    <div class="input-group">
+        <label>Volume (ml)</label>
+        <input type="number" id="inVol" placeholder="e.g., 250" min="0">
+    </div>
+    <div class="input-group">
+        <label>Duration (sec)</label>
+        <input type="number" id="inDur" placeholder="e.g., 20" min="1">
+    </div>
+    <button class="btn-save" onclick="saveEntry()">SAVE ENTRY</button>
+
+    <details>
+        <summary>⚙️ Calibration Parameters</summary>
+        <div class="input-group">
+            <label>Vmin</label>
+            <input type="number" id="pVmin" value="100" min="0">
+        </div>
+        <div class="input-group">
+            <label>Vopt</label>
+            <input type="number" id="pVopt" value="350" min="0">
+        </div>
+        <div class="input-group">
+            <label>Qref (ml/s)</label>
+            <input type="number" id="pQref" value="12" min="0">
+        </div>
+        <div class="input-group">
+            <label>RFR (ml/min)</label>
+            <input type="number" id="pRfr" value="2.0" step="0.1" min="0.1">
+        </div>
+    </details>
+
+    <div style="margin-top: auto; display: flex; flex-direction: column; gap: 8px;">
+        <button style="background: var(--green); color: white;" onclick="showReadme()">📖 METHODOLOGY (v4.3)</button>
+        <button style="background: #2980b9; color: white;" onclick="exportData()">Export JSON</button>
+        <button style="background: #95a5a6; color: white;" onclick="clearData()">Clear All</button>
+    </div>
+</aside>
+
+<main>
+    <div class="cards">
+        <div class="card sei-card">
+            <label>SEI (Storage Efficiency)</label>
+            <div><span class="val" id="currSei">0%</span> <span id="overnightBadge"></span></div>
+            <div class="sub-text">Session average: <span id="avgSei">0%</span></div>
+        </div>
+        <div class="card vei-card">
+            <label>VEI (Voiding Efficiency)</label>
+            <div><span class="val" id="currVei">0%</span></div>
+            <div class="sub-text">Session average: <span id="avgVei">0%</span></div>
+        </div>
+    </div>
+
+    <div class="trend-panel" id="trendPanel" style="display: none;">
+        <div class="metric-box"><span class="sub-text">Δ SEI</span><span class="metric-val" id="tDelta">0</span></div>
+        <div class="metric-box"><span class="sub-text">IQR</span><span class="metric-val" id="tIqr">0</span></div>
+        <div class="metric-box"><span class="sub-text">AF Ratio</span><span class="metric-val" id="tAf">0</span></div>
+        <div class="metric-box"><span class="sub-text">D/N Ratio</span><span class="metric-val" id="tDn">0</span></div>
+        <div id="verdict" class="verdict-box">Need 7 entries</div>
+    </div>
+
+    <div class="chart-container">
+        <canvas id="mainChart"></canvas>
+    </div>
+</main>
+
+<!-- README Modal -->
+<div id="readmeModal" class="modal">
+    <div class="modal-content">
+        <span class="modal-close" onclick="closeReadme()">×</span>
+        <h2>Bladder Efficiency Tracker — Methodology v4.3</h2>
+        
+        <h3>Core Indices</h3>
+        <p><strong>SEI = MA × DA × 100%</strong></p>
+        <p><strong>VEI = √(Qavg / Qref) × MA × 100%</strong></p>
+
+        <div class="highlight-box">
+            <strong>DA Logic (v4.3 — Dual Penalty)</strong><br>
+            • Slow filling (FillRate &lt; RFR): DA = FillRate / RFR<br>
+            • Rapid filling (FillRate &gt; 1.5 × RFR): DA reduced (floor = 0.6)<br>
+            • Overnight: DA = 1.0
+        </div>
+    </div>
+</div>
+
+<script>
+    let history = JSON.parse(localStorage.getItem('bladderData')) || [];
+    let chart;
+
+    document.getElementById('inTime').value = new Date().toTimeString().slice(0,5);
+
+    function saveEntry() {
+        const time = document.getElementById('inTime').value;
+        let vol = parseFloat(document.getElementById('inVol').value);
+        let dur = parseFloat(document.getElementById('inDur').value);
+        
+        if (!time || isNaN(vol) || isNaN(dur)) {
+            alert("Please fill in all fields correctly");
+            return;
+        }
+
+        vol = Math.max(vol, 1);
+        dur = Math.max(dur, 1);
+
+        const params = getParams();
+        const entry = calculateMetrics(time, vol, dur, params);
+
+        history.push(entry);
+        localStorage.setItem('bladderData', JSON.stringify(history));
+        
+        document.getElementById('inVol').value = '';
+        document.getElementById('inDur').value = '';
+        updateUI();
+    }
+
+    function getParams() {
+        return {
+            vmin: parseFloat(document.getElementById('pVmin').value) || 100,
+            vopt: parseFloat(document.getElementById('pVopt').value) || 350,
+            qref: parseFloat(document.getElementById('pQref').value) || 12,
+            rfr: parseFloat(document.getElementById('pRfr').value) || 2.0
+        };
+    }
+
+    function calculateMetrics(time, vol, dur, params) {
+        const lastEntry = history[history.length - 1];
+        let fillTime = 0;
+        let isOvernight = false;
+
+        const hour = parseInt(time.split(':')[0]);
+
+        if (lastEntry) {
+            let diff = timeToMins(time) - timeToMins(lastEntry.time);
+            if (diff <= 0) { 
+                diff += 1440; 
+                isOvernight = true; 
+            }
+            fillTime = diff;
+        } else {
+            isOvernight = true;
+        }
+
+        const ma = Math.max(0, Math.min(1, (vol - params.vmin) / (params.vopt - params.vmin)));
+
+        let da = 1.0;
+        if (!isOvernight && fillTime > 0) {
+            const fillRate = vol / fillTime;
+            if (fillRate < params.rfr) {
+                da = fillRate / params.rfr;
+            } else if (fillRate > 1.5 * params.rfr) {
+                da = Math.max(0.6, 1.0 - (fillRate - 1.5 * params.rfr) * 0.05);
+            }
+        }
+
+        const sei = (ma * da * 100).toFixed(1);
+        const qavg = vol / dur;
+        const vei = (Math.max(0, Math.min(1, Math.sqrt(qavg / params.qref) * ma)) * 100).toFixed(1);
+
+        return {
+            time, vol, dur, fillTime, 
+            fillRate: fillTime > 0 ? vol / fillTime : 0,
+            sei: parseFloat(sei), 
+            vei: parseFloat(vei),
+            isNight: (hour >= 22 || hour < 6),
+            isOvernight
+        };
+    }
+
+    function timeToMins(t) {
+        const [h, m] = t.split(':').map(Number);
+        return h * 60 + m;
+    }
+
+    function getMedian(arr) {
+        if (!arr.length) return 0;
+        const s = [...arr].sort((a, b) => a - b);
+        const mid = Math.floor(s.length / 2);
+        return s.length % 2 !== 0 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+    }
+
+    function updateUI() {
+        if (!history.length) return;
+
+        const last = history[history.length - 1];
+        document.getElementById('currSei').innerText = last.sei + '%';
+        document.getElementById('currVei').innerText = last.vei + '%';
+        document.getElementById('overnightBadge').innerHTML = last.isOvernight ? '<span class="badge">night</span>' : '';
+
+        const avgSei = (history.reduce((a, b) => a + b.sei, 0) / history.length).toFixed(1);
+        const avgVei = (history.reduce((a, b) => a + b.vei, 0) / history.length).toFixed(1);
+        
+        document.getElementById('avgSei').innerText = avgSei + '%';
+        document.getElementById('avgVei').innerText = avgVei + '%';
+
+        document.getElementById('trendPanel').style.display = 'grid';
+        
+        const last7 = history.slice(-7);
+        const prev7 = history.length >= 14 ? history.slice(-14, -7) : [];
+        
+        const mLast = getMedian(last7.map(e => e.sei));
+        const mPrev = prev7.length ? getMedian(prev7.map(e => e.sei)) : mLast;
+        const delta = (mLast - mPrev).toFixed(1);
+        
+        const sorted = last7.map(e => e.sei).sort((a,b) => a-b);
+        const iqr = sorted.length >= 4 ? (sorted[Math.floor(sorted.length * 0.75)] - sorted[Math.floor(sorted.length * 0.25)]).toFixed(1) : "—";
+        
+        const medianAllFR = getMedian(history.map(e => e.fillRate));
+        const afRatio = last7.length ? (last7.filter(e => e.fillRate > 1.5 * medianAllFR).length / last7.length).toFixed(2) : "0.00";
+
+        const nightSeis = history.filter(e => e.isNight).map(e => e.sei);
+        const daySeis = history.filter(e => !e.isNight).map(e => e.sei);
+        const dnRatio = (daySeis.length && nightSeis.length) ? (getMedian(nightSeis) / getMedian(daySeis)).toFixed(2) : "—";
+
+        document.getElementById('tDelta').innerText = (delta > 0 ? '+' : '') + delta;
+        document.getElementById('tIqr').innerText = iqr;
+        document.getElementById('tAf').innerText = afRatio;
+        document.getElementById('tDn').innerText = dnRatio;
+
+        const vBox = document.getElementById('verdict');
+        if (history.length < 7) {
+            vBox.innerText = "Need at least 7 entries";
+            vBox.style.background = "#eee";
+        } else if (parseFloat(delta) >= 5 && parseFloat(iqr) < 15) {
+            vBox.innerText = "✅ POSITIVE TREND";
+            vBox.style.background = "#d4edda";
+        } else if (parseFloat(afRatio) > 0.4) {
+            vBox.innerText = "⚠️ PSEUDO-IMPROVEMENT";
+            vBox.style.background = "#fff3cd";
+        } else if (parseFloat(delta) <= -5) {
+            vBox.innerText = "📉 NEGATIVE TREND";
+            vBox.style.background = "#f8d7da";
+        } else {
+            vBox.innerText = "⚖️ STABLE STATE";
+            vBox.style.background = "#d1ecf1";
+        }
+
+        updateChart();
+    }
+
+    function updateChart() {
+        const ctx = document.getElementById('mainChart').getContext('2d');
+        if (chart) chart.destroy();
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: history.map((_, i) => i + 1),
+                datasets: [
+                    { label: 'SEI (Storage)', data: history.map(e => e.sei), borderColor: '#3498db', tension: 0.2 },
+                    { label: 'VEI (Voiding)', data: history.map(e => e.vei), borderColor: '#e74c3c', borderDash: [5, 5], tension: 0.2 }
+                ]
+            },
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                scales: { y: { min: 0, max: 100 } } 
+            }
+        });
+    }
+
+    function exportData() {
+        const params = getParams();
+        const exportObj = {
+            version: "4.3",
+            exportDate: new Date().toISOString(),
+            parameters: params,
+            totalEntries: history.length,
+            entries: history
+        };
+        
+        const dataStr = JSON.stringify(exportObj, null, 2);
+        const blob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `bladder_report_v43_${new Date().toISOString().slice(0,10)}.json`;
+        a.click();
+    }
+
+    function clearData() {
+        if (confirm("Delete all data?")) {
+            localStorage.clear();
+            history = [];
+            location.reload();
+        }
+    }
+
+    function showReadme() { document.getElementById('readmeModal').style.display = 'block'; }
+    function closeReadme() { document.getElementById('readmeModal').style.display = 'none'; }
+
+    updateUI();
+</script>
+</body>
+</html>
